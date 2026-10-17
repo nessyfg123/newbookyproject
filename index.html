@@ -93,12 +93,6 @@
   </main>
 
   <script>
-    // ==========================================
-    // CONFIGURATION
-    // ==========================================
-    // Paste your Google Cloud Books API key here
-    const GOOGLE_BOOKS_API_KEY = "AIzaSyDj3tNFQcDtbZiIzy40nYr-qoWv6eJRgFg"; 
-
     // App State stored in browser LocalStorage
     let userLibrary = JSON.parse(localStorage.getItem('bookvault_collection')) || [];
 
@@ -113,20 +107,15 @@
     const collectionCount = document.getElementById('collection-count');
 
     // ==========================================
-    // LIVE GOOGLE BOOKS API FETCH FUNCTION
+    // LIVE PUBLIC GOOGLE BOOKS API FETCH
     // ==========================================
     async function searchGoogleBooks(query) {
       if (!query.trim()) return [];
 
       const encodedQuery = encodeURIComponent(query.trim());
       
-      // Corrected Google Books Endpoint
-      let url = `https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=15`;
-      
-      // Append key only if provided
-      if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY.trim() !== "") {
-        url += `&key=${GOOGLE_BOOKS_API_KEY.trim()}`;
-      }
+      // Public Google Books search endpoint (no API key required)
+      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=15`;
 
       try {
         const response = await fetch(url);
@@ -138,12 +127,10 @@
         return data.items.map((item) => {
           const info = item.volumeInfo || {};
           
-          // Obtain ISBN-13 or ISBN-10
           const isbns = info.industryIdentifiers || [];
           const isbnObj = isbns.find(i => i.type === 'ISBN_13') || isbns.find(i => i.type === 'ISBN_10');
           const isbn = isbnObj ? isbnObj.identifier : null;
 
-          // Fetch cover art with fallback to Open Library
           let coverUrl = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || null;
           if (coverUrl) {
             coverUrl = coverUrl.replace('http://', 'https://');
@@ -172,12 +159,11 @@
     // UI RENDER FUNCTIONS
     // ==========================================
     
-    // Render API Search Results
     function renderSearchResults(books) {
       searchResults.innerHTML = '';
 
       if (books === null) {
-        searchResults.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-800 text-red-300 text-sm rounded-xl">Error fetching data from Google API. Check your connection or API key.</div>`;
+        searchResults.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-800 text-red-300 text-sm rounded-xl">Unable to fetch books right now. Please check your internet connection or try again shortly.</div>`;
         return;
       }
 
@@ -214,7 +200,6 @@
       });
     }
 
-    // Render Saved Shelf
     function renderCollection() {
       collectionGrid.innerHTML = '';
       statTotal.textContent = userLibrary.length;

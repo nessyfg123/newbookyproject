@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookVault - Personal Book Collection</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+  <!-- Header / Navbar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-lg shadow-indigo-500/20">
+          <i class="fa-solid fa-book-bookmark text-xl"></i>
+        </div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">BookVault</h1>
+          <p class="text-xs text-slate-400">Live Google Books API Collector</p>
+        </div>
+      </div>
+      
+      <!-- Stats Badges -->
+      <div class="flex gap-4 text-sm font-medium">
+        <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/50">
+          <span class="text-slate-400">Total Bookis:</span>
+          <span id="stat-total" class="ml-1 text-indigo-400 font-bold">0</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+    
+    <!-- Left Column: Live Google Books Search -->
+    <section class="lg:col-span-5 space-y-4">
+      <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-5 shadow-xl">
+        <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+          <i class="fa-solid fa-magnifying-glass text-indigo-400"></i>
+          Search Google Books API
+        </h2>
+        
+        <form id="search-form" class="flex gap-2 mb-4">
+          <input 
+            type="text" 
+            id="search-input" 
+            placeholder="Search title, author, or ISBN..." 
+            class="w-full bg-slate-900/90 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-indigo-500 transition"
+            required
+          />
+          <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 px-4 py-2.5 rounded-xl font-medium text-sm transition flex items-center gap-2 text-white">
+            <span>Search</span>
+          </button>
+        </form>
+
+        <!-- Search Status / Results Container -->
+        <div id="search-status" class="text-sm text-slate-400 hidden mb-3">Searching Google Books database...</div>
+        
+        <div id="search-results" class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+          <div class="text-center py-12 text-slate-500 text-sm">
+            Search for books above to query the Google Books API.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: User's Shelf Collection -->
+    <section class="lg:col-span-7 space-y-4">
+      <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-5 shadow-xl min-h-[400px]">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-lg font-semibold flex items-center gap-2">
+            <i class="fa-solid fa-layer-group text-emerald-400"></i>
+            My Collection
+          </h2>
+          <span class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full" id="collection-count">0 Saved</span>
+        </div>
+
+        <!-- Shelf Display -->
+        <div id="collection-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+          <!-- Dynamically populated from LocalStorage -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-shelf" class="text-center py-16">
+          <i class="fa-solid fa-books text-4xl text-slate-700 mb-3"></i>
+          <p class="text-slate-400 text-sm">Your shelf is empty.</p>
+          <p class="text-slate-500 text-xs mt-1">Search books on the left to add them to your collection.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // ==========================================
+    // CONFIGURATION
+    // ==========================================
+    // Replace with your Google Cloud Books API key
+    const GOOGLE_BOOKS_API_KEY = "AIzaSyDj3tNFQcDtbZiIzy40nYr-qoWv6eJRgFg"; 
+
+    // App State stored in browser LocalStorage
+    let userLibrary = JSON.parse(localStorage.getItem('bookvault_collection')) || [];
+
+    // DOM Elements
+    const searchForm = document.getElementById('search-form');
+    const searchInput = document.getElementById('search-input');
+    const searchResults = document.getElementById('search-results');
+    const searchStatus = document.getElementById('search-status');
+    const collectionGrid = document.getElementById('collection-grid');
+    const emptyShelf = document.getElementById('empty-shelf');
+    const statTotal = document.getElementById('stat-total');
+    const collectionCount = document.getElementById('collection-count');
+
+    // ==========================================
+    // LIVE GOOGLE BOOKS API FETCH FUNCTION
+    // ==========================================
+    async function searchGoogleBooks(query) {
+      if (!query.trim()) return [];
+
+      const encodedQuery = encodeURIComponent(query.trim());
+      
+      // Construct API URL with Key option
+      let url = `https://www.googleapis.com/apis/v1/volumes?q=${encodedQuery}&maxResults=15`;
+      if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY !== "YOUR_GOOGLE_BOOKS_API_KEY") {
+        url += `&key=${GOOGLE_BOOKS_API_KEY}`;
+      }
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        
+        const data = await response.json();
+        if (!data.items) return [];
+
+        return data.items.map((item) => {
+          const info = item.volumeInfo || {};
+          
+          // Obtain ISBN-13 or ISBN-10
+          const isbns = info.industryIdentifiers || [];
+          const isbnObj = isbns.find(i => i.type === 'ISBN_13') || isbns.find(i => i.type === 'ISBN_10');
+          const isbn = isbnObj ? isbnObj.identifier : null;
+
+          // Fetch cover art with fallback to Open Library
+          let coverUrl = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || null;
+          if (coverUrl) {
+            coverUrl = coverUrl.replace('http://', 'https://');
+          } else if (isbn) {
+            coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
+          } else {
+            coverUrl = 'https://via.placeholder.com/150x220?text=No+Cover';
+          }
+
+          return {
+            id: item.id,
+            title: info.title || 'Unknown Title',
+            author: info.authors ? info.authors.join(', ') : 'Unknown Author',
+            year: info.publishedDate ? info.publishedDate.substring(0, 4) : 'N/A',
+            cover: coverUrl,
+            isbn: isbn || 'N/A'
+          };
+        });
+      } catch (error) {
+        console.error("Error connecting to Google Books API:", error);
+        return null;
+      }
+    }
+
+    // ==========================================
+    // UI RENDER FUNCTIONS
+    // ==========================================
+    
+    // Render API Search Results
+    function renderSearchResults(books) {
+      searchResults.innerHTML = '';
+
+      if (books === null) {
+        searchResults.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-800 text-red-300 text-sm rounded-xl">Error fetching data from Google API. Check your connection or API key.</div>`;
+        return;
+      }
+
+      if (books.length === 0) {
+        searchResults.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No books found matching your query.</div>`;
+        return;
+      }
+
+      books.forEach(book => {
+        const isAlreadySaved = userLibrary.some(item => item.id === book.id);
+        
+        const card = document.createElement('div');
+        card.className = "flex gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-700/50 hover:border-slate-600 transition items-center";
+        
+        card.innerHTML = `
+          <img src="${book.cover}" alt="${book.title}" class="w-12 h-16 object-cover rounded-md bg-slate-800 flex-shrink-0" />
+          <div class="flex-1 min-w-0">
+            <h3 class="text-sm font-semibold text-slate-100 truncate">${book.title}</h3>
+            <p class="text-xs text-slate-400 truncate">${book.author}</p>
+            <p class="text-[10px] text-slate-500 mt-0.5">${book.year} • ISBN: ${book.isbn}</p>
+          </div>
+          <button 
+            onclick='toggleCollectBook(${JSON.stringify(book).replace(/'/g, "&apos;")})'
+            class="px-3 py-1.5 rounded-lg text-xs font-medium transition flex-shrink-0 ${
+              isAlreadySaved 
+                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800 hover:bg-red-950 hover:text-red-400 hover:border-red-800' 
+                : 'bg-indigo-600 hover:bg-indigo-500 text-white'
+            }"
+          >
+            ${isAlreadySaved ? 'Saved' : 'Collect'}
+          </button>
+        `;
+        searchResults.appendChild(card);
+      });
+    }
+
+    // Render Saved Shelf
+    function renderCollection() {
+      collectionGrid.innerHTML = '';
+      statTotal.textContent = userLibrary.length;
+      collectionCount.textContent = `${userLibrary.length} Saved`;
+
+      if (userLibrary.length === 0) {
+        emptyShelf.classList.remove('hidden');
+        collectionGrid.classList.add('hidden');
+        return;
+      }
+
+      emptyShelf.classList.add('hidden');
+      collectionGrid.classList.remove('hidden');
+
+      userLibrary.forEach(book => {
+        const card = document.createElement('div');
+        card.className = "group relative bg-slate-900/80 border border-slate-700/50 rounded-xl overflow-hidden hover:border-indigo-500/50 transition flex flex-col";
+        
+        card.innerHTML = `
+          <div class="aspect-[2/3] w-full bg-slate-800 relative overflow-hidden">
+            <img src="${book.cover}" alt="${book.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+            <button 
+              onclick="removeBook('${book.id}')"
+              class="absolute top-2 right-2 bg-slate-900/80 hover:bg-red-600 text-slate-300 hover:text-white p-1.5 rounded-full text-xs transition backdrop-blur opacity-0 group-hover:opacity-100"
+              title="Remove book"
+            >
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+          <div class="p-3 flex-1 flex flex-col justify-between">
+            <div>
+              <h4 class="text-xs font-bold text-slate-100 line-clamp-1">${book.title}</h4>
+              <p class="text-[11px] text-slate-400 line-clamp-1 mt-0.5">${book.author}</p>
+            </div>
+            <div class="mt-2 text-[10px] text-indigo-400 font-medium">
+              ${book.year}
+            </div>
+          </div>
+        `;
+        collectionGrid.appendChild(card);
+      });
+    }
+
+    // ==========================================
+    // ACTION HANDLERS
+    // ==========================================
+    
+    // Add or remove book from saved collection
+    function toggleCollectBook(book) {
+      const index = userLibrary.findIndex(item => item.id === book.id);
+      if (index >= 0) {
+        userLibrary.splice(index, 1);
+      } else {
+        userLibrary.push(book);
+      }
+      saveAndSync();
+    }
+
+    function removeBook(bookId) {
+      userLibrary = userLibrary.filter(b => b.id !== bookId);
+      saveAndSync();
+    }
+
+    function saveAndSync() {
+      localStorage.setItem('bookvault_collection', JSON.stringify(userLibrary));
+      renderCollection();
+      
+      // Re-render current search results list to update button state
+      const currentQuery = searchInput.value.trim();
+      if (currentQuery) {
+        searchGoogleBooks(currentQuery).then(renderSearchResults);
+      }
+    }
+
+    // Form submission listener
+    searchForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const query = searchInput.value.trim();
+      if (!query) return;
+
+      searchStatus.classList.remove('hidden');
+      searchResults.innerHTML = '';
+      
+      const books = await searchGoogleBooks(query);
+      
+      searchStatus.classList.add('hidden');
+      renderSearchResults(books);
+    });
+
+    // Initial load
+    renderCollection();
+  </script>
+</body>
+</html>

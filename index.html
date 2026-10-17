@@ -18,7 +18,7 @@
         </div>
         <div>
           <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">BookVault</h1>
-          <p class="text-xs text-slate-400">Live Google Books API Collector</p>
+          <p class="text-xs text-slate-400">Open Library Collector</p>
         </div>
       </div>
       
@@ -34,12 +34,12 @@
 
   <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
     
-    <!-- Left Column: Live Google Books Search -->
+    <!-- Left Column: Search -->
     <section class="lg:col-span-5 space-y-4">
       <div class="bg-slate-800/50 border border-slate-700/60 rounded-2xl p-5 shadow-xl">
         <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
           <i class="fa-solid fa-magnifying-glass text-indigo-400"></i>
-          Search Google Books API
+          Search Book Database
         </h2>
         
         <form id="search-form" class="flex gap-2 mb-4">
@@ -56,11 +56,11 @@
         </form>
 
         <!-- Search Status / Results Container -->
-        <div id="search-status" class="text-sm text-slate-400 hidden mb-3">Searching Google Books database...</div>
+        <div id="search-status" class="text-sm text-slate-400 hidden mb-3">Searching library database...</div>
         
         <div id="search-results" class="space-y-3 max-h-[600px] overflow-y-auto pr-1">
           <div class="text-center py-12 text-slate-500 text-sm">
-            Search for books above to query the Google Books API.
+            Search for books above to query the database.
           </div>
         </div>
       </div>
@@ -107,50 +107,46 @@
     const collectionCount = document.getElementById('collection-count');
 
     // ==========================================
-    // LIVE PUBLIC GOOGLE BOOKS API FETCH
+    // FREE OPEN LIBRARY API FETCH FUNCTION
     // ==========================================
-    async function searchGoogleBooks(query) {
+    async function searchBooksAPI(query) {
       if (!query.trim()) return [];
 
       const encodedQuery = encodeURIComponent(query.trim());
-      
-      // Public Google Books search endpoint (no API key required)
-      const url = `https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=15`;
+      const url = `https://openlibrary.org/search.json?q=${encodedQuery}&limit=15`;
 
       try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
         
         const data = await response.json();
-        if (!data.items) return [];
+        if (!data.docs) return [];
 
-        return data.items.map((item) => {
-          const info = item.volumeInfo || {};
-          
-          const isbns = info.industryIdentifiers || [];
-          const isbnObj = isbns.find(i => i.type === 'ISBN_13') || isbns.find(i => i.type === 'ISBN_10');
-          const isbn = isbnObj ? isbnObj.identifier : null;
+        return data.docs.map((item) => {
+          const title = item.title || 'Unknown Title';
+          const author = item.author_name ? item.author_name.join(', ') : 'Unknown Author';
+          const year = item.first_publish_year ? item.first_publish_year.toString() : 'N/A';
+          const isbn = item.isbn ? item.isbn[0] : null;
+          const coverId = item.cover_i;
 
-          let coverUrl = info.imageLinks?.thumbnail || info.imageLinks?.smallThumbnail || null;
-          if (coverUrl) {
-            coverUrl = coverUrl.replace('http://', 'https://');
+          let coverUrl = 'https://via.placeholder.com/150x220?text=No+Cover';
+          if (coverId) {
+            coverUrl = `https://covers.openlibrary.org/b/id/${coverId}-M.jpg`;
           } else if (isbn) {
             coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`;
-          } else {
-            coverUrl = 'https://via.placeholder.com/150x220?text=No+Cover';
           }
 
           return {
-            id: item.id,
-            title: info.title || 'Unknown Title',
-            author: info.authors ? info.authors.join(', ') : 'Unknown Author',
-            year: info.publishedDate ? info.publishedDate.substring(0, 4) : 'N/A',
+            id: item.key || `${title}-${year}`,
+            title: title,
+            author: author,
+            year: year,
             cover: coverUrl,
             isbn: isbn || 'N/A'
           };
         });
       } catch (error) {
-        console.error("Error connecting to Google Books API:", error);
+        console.error("Error connecting to Open Library API:", error);
         return null;
       }
     }
@@ -163,7 +159,7 @@
       searchResults.innerHTML = '';
 
       if (books === null) {
-        searchResults.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-800 text-red-300 text-sm rounded-xl">Unable to fetch books right now. Please check your internet connection or try again shortly.</div>`;
+        searchResults.innerHTML = `<div class="p-4 bg-red-900/20 border border-red-800 text-red-300 text-sm rounded-xl">Unable to fetch books right now. Check your network or try again.</div>`;
         return;
       }
 
@@ -268,7 +264,7 @@
       
       const currentQuery = searchInput.value.trim();
       if (currentQuery) {
-        searchGoogleBooks(currentQuery).then(renderSearchResults);
+        searchBooksAPI(currentQuery).then(renderSearchResults);
       }
     }
 
@@ -280,7 +276,7 @@
       searchStatus.classList.remove('hidden');
       searchResults.innerHTML = '';
       
-      const books = await searchGoogleBooks(query);
+      const books = await searchBooksAPI(query);
       
       searchStatus.classList.add('hidden');
       renderSearchResults(books);

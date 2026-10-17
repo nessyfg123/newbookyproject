@@ -25,7 +25,7 @@
       <!-- Stats Badges -->
       <div class="flex gap-4 text-sm font-medium">
         <div class="bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/50">
-          <span class="text-slate-400">Total Bookis:</span>
+          <span class="text-slate-400">Total Books:</span>
           <span id="stat-total" class="ml-1 text-indigo-400 font-bold">0</span>
         </div>
       </div>
@@ -96,7 +96,7 @@
     // ==========================================
     // CONFIGURATION
     // ==========================================
-    // Replace with your Google Cloud Books API key
+    // Paste your Google Cloud Books API key here
     const GOOGLE_BOOKS_API_KEY = "AIzaSyDj3tNFQcDtbZiIzy40nYr-qoWv6eJRgFg"; 
 
     // App State stored in browser LocalStorage
@@ -120,10 +120,12 @@
 
       const encodedQuery = encodeURIComponent(query.trim());
       
-      // Construct API URL with Key option
-      let url = `https://www.googleapis.com/apis/v1/volumes?q=${encodedQuery}&maxResults=15`;
-      if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY !== "") {
-        url += `&key=${GOOGLE_BOOKS_API_KEY}`;
+      // Corrected Google Books Endpoint
+      let url = `https://www.googleapis.com/books/v1/volumes?q=${encodedQuery}&maxResults=15`;
+      
+      // Append key only if provided
+      if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY.trim() !== "") {
+        url += `&key=${GOOGLE_BOOKS_API_KEY.trim()}`;
       }
 
       try {
@@ -260,7 +262,6 @@
     // ACTION HANDLERS
     // ==========================================
     
-    // Add or remove book from saved collection
     function toggleCollectBook(book) {
       const index = userLibrary.findIndex(item => item.id === book.id);
       if (index >= 0) {
@@ -280,14 +281,12 @@
       localStorage.setItem('bookvault_collection', JSON.stringify(userLibrary));
       renderCollection();
       
-      // Re-render current search results list to update button state
       const currentQuery = searchInput.value.trim();
       if (currentQuery) {
         searchGoogleBooks(currentQuery).then(renderSearchResults);
       }
     }
 
-    // Form submission listener
     searchForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const query = searchInput.value.trim();
@@ -302,7 +301,6 @@
       renderSearchResults(books);
     });
 
-    // Initial load
     renderCollection();
   </script>
 </body>
